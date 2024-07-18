@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <title>Cart | Artmart</title>
+</head>
+
+<body>
+  <header>
+    <a href="search.html">
+      <img src="artmart_logo.png" alt="Artmart" class="logo">
+    </a>
+    <nav>
+      <a href="search.html">Search</a>
+      <a href="cart.html" id="cart-link">Cart</a>
+    </nav>
+  </header>
+
+  <main>
+
+    <section id="cart" class="cart">
+      <div id="cart-total" class="cart-total">Total: <span id="price-total">0</span></div>
+      <button type="button" id="cart-checkout" class="cart-checkout" onclick="window.location.href='checkout.html';">Checkout</button>
+    </section>
+  </main>
+
+  <script type="module">
+    showItemsCountInCart()
+    import * as Frame from './frame.js';
+    import * as Cart from './cart.js';
+
+    const cartItems = Cart.getCartItems();
+    let totalPrice = 0;
+    if (cartItems.length > 0) {
+      for (let i = 0; i < cartItems.length; i++) {
+        createCartItem(cartItems[i]);
+      }
+    } else {
+      document.getElementById('cart').innerHTML = "There are no items in your shopping cart.";
+    }
+    document.getElementById('price-total').innerHTML = `€ ${(totalPrice / 100).toFixed(2)}`;
+
+    /** 
+     * Adds the given cart item to the DOM.
+     *
+     * @param cartItem A cart item from local storage.
+    */
+    async function createCartItem(cartItem) {
+      let artworkData;
+      let cache = localStorage.getItem(cartItem.objectID);
+      if (!cache) { // check cache
+        await fetchArtwork(cartItem.objectID)
+                .then(response => {
+                  artworkData = response;
+                  localStorage.setItem(cartItem.objectID, JSON.stringify(response));
+                })
+                .catch(error => {
+                  console.error(error);
+                });
+      } else {
+        artworkData = JSON.parse(cache);
+      }
+
+      // set the right values
+      const printSize = cartItem.printSize;
+      const frameStyle = cartItem.frameStyle;
+      const frameWidth = cartItem.frameWidth;
+      const matColor = cartItem.matColor;
+      const matWidth = cartItem.matWidth;
+
+      const itemDiv = document.createElement("div");
+      itemDiv.classList.add("cart-item");
+
+      const previewDiv = document.createElement("div");
+      previewDiv.classList.add("cart-preview");
+
+      const previewImg = document.createElement("img");
+      previewImg.classList.add("cart-thumb");
+      previewImg.src = artworkData.primaryImageSmall;
+      previewImg.alt = artworkData.title;
+      previewImg.onload = () => {
+        Frame.render(previewImg, previewDiv, null, printSize, frameStyle, frameWidth, matColor, matWidth);
+      };
+
+      // complete link URL
+      const framingLink = document.createElement("a");
+      framingLink.href = `framing.html?objectID=${artworkData.objectID}&printSize=${printSize}&frameStyle=${frameStyle}&frameWidth=${frameWidth}&matColor=${matColor}&matWidth=${matWidth}`;
+      framingLink.appendChild(previewImg);
+
+      previewDiv.appendChild(framingLink);
+      itemDiv.appendChild(previewDiv);
+
+      // complete item description
+      const sizeText = {
+        'S': 'Small',
+        'M': 'Medium',
+        'L': 'Large'
+      };
+      let currPrice = Frame.calculatePrice(printSize, frameStyle, frameWidth, matWidth);
+      const labelDiv = document.createElement("div")
+      labelDiv.classList.add("museum-label");
+      labelDiv.innerHTML = `
+          <div>
+            <span class="artist">${artworkData.artistDisplayName}</span>
+            <span class="title">${artworkData.title}</span>,
+            <span class="date">${artworkData.objectDate}</span>
+            <br><br>
+            <span class="frame-description">${sizeText[printSize]} print in a ${frameWidth / 10} cm ${frameStyle} frame with a ${matWidth / 10} cm ${matColor} mat.</span>
+          </div>
+          <div class="price">€ ${(currPrice / 100).toFixed(2)}</div>
+          <button class="cart-remove" aria-label="Remove"></button>`;
+
+      // add current price to total price
+      totalPrice += currPrice;
+
+      const removeButton = labelDiv.querySelector('.cart-remove');
+      removeButton.addEventListener("click", () => {
+        itemDiv.remove();
+        removeItemFromCart(cartItem);
+        totalPrice -= currPrice;
+        document.getElementById('price-total').innerHTML = `€ ${(totalPrice / 100).toFixed(2)}`;
+      });
+
+      itemDiv.appendChild(labelDiv);
+      
+      // add itemDiv to DOM
+      document.body.appendChild(itemDiv);
+
+    }
+
+    function fetchArtwork(id) {
+      return new Promise((resolve, reject) => {
+        const artworks = new XMLHttpRequest();
+        artworks.open('GET', `${Frame.API_BASE_URL}objects/` + id);
+
+        artworks.onload = function () {
+          if (artworks.status >= 200 && artworks.status < 400) {
+            const response = JSON.parse(artworks.responseText);
+            resolve(response);
+          } else {
+            reject();
+          }
+        };
+
+        artworks.onerror = function () {
+          reject(new Error('Request failed'));
+        };
+
+        artworks.send();
+      });
+    }
+
+    function removeItemFromCart(cartItem) {
+      let removedItem = false;
+      let items = Cart.getCartItems().filter(item => {
+        if (!removedItem && item.objectID === cartItem.objectID) {
+          removedItem = true;
+          return false;
+        }
+        return true;
+      });
+      localStorage.setItem('cart', JSON.stringify(items));
+      if (localStorage.getItem('cart') === '') {
+        localStorage.setItem('cart', null);
+      }
+    }
+
+    function showItemsCountInCart() {
+      const items = localStorage.getItem('cart');
+      if (items) {
+        const itemsJSON = JSON.parse(items);
+        const itemsCount = itemsJSON.length;
+        let cartLink = document.getElementById('cart-link');
+        if (itemsCount)
+          cartLink.textContent = "Cart ("+ itemsCount + ")";
+      }
+    }
+  </script>
+</body>
+
+</html>

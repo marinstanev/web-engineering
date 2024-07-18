@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <title>Search | Artmart</title>
+</head>
+
+<body>
+  <header>
+    <a href="search.html">
+      <img src="artmart_logo.png" alt="Artmart" class="logo">
+    </a>
+    <nav>
+      <a href="search.html">Search</a>
+      <a href="cart.html" id="cart-link">Cart</a>
+    </nav>
+  </header>
+
+  <main>
+    <form role="search" class="search-form">
+      <input type="search" id="search" name="q" placeholder="Search the collection" aria-labelledby="searchbutton">
+      <button type="submit" id="searchbutton">Search</button>
+    </form>
+
+    <div id="search-info" class="search-info">
+      Search our collection of more than 400,000 artworks.
+    </div>
+
+    <section id="gallery" class="gallery">
+
+      <script type="module">
+        //localStorage.clear()
+        showItemsCountInCart();
+        // Data Needed
+        import * as Search from './search.js'
+
+        let searchInfo = document.getElementById('search-info');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const q = urlParams.get('q') || '';
+        searchArtworks(q);
+
+        // Functions
+        async function searchArtworks(q) {
+          let artworks = new XMLHttpRequest();
+          artworks.responseType = 'json';
+
+          let artworkIds;
+          let artworksData = [];
+          let cache;
+          if (!q) {
+            let content = await fetch('./highlights.json');
+            let data = await content.json();
+            artworkIds = await data.highlights;
+          } else {
+            searchInfo.textContent = "Searching for " + q;
+            const response = await fetch(`${Search.API_BASE_URL}search?hasImages=true&q=` + q);
+            let data = await response.json();
+            artworkIds = await data.objectIDs;
+          }
+          if (artworkIds) {
+            for (let i = 0; i < artworkIds.length && i < 100; ++i) {
+              cache = localStorage.getItem(artworkIds[i]);
+              if (!cache) { // check cache
+                await fetchArtwork(artworkIds[i])
+                  .then(response => {
+                    artworksData[i] = response;
+                    localStorage.setItem(artworkIds[i], JSON.stringify(response));
+                  })
+                  .catch(error => {
+                    console.error(error);
+                  });
+              } else {
+                  artworksData[i] = JSON.parse(cache);
+              }
+            }
+          }
+          populateGallery(artworksData, q);
+        }
+
+        function fetchArtwork(id) {
+          return new Promise((resolve, reject) => {
+            const artworks = new XMLHttpRequest();
+            artworks.open('GET', `${Search.API_BASE_URL}objects/` + id);
+
+            artworks.onload = function () {
+              if (artworks.status >= 200 && artworks.status < 400) {
+                const response = JSON.parse(artworks.responseText);
+                resolve(response);
+              } else {
+                reject();
+              }
+            };
+
+            artworks.onerror = function () {
+              reject(new Error('Request failed'));
+            };
+
+            artworks.send();
+          });
+        }
+
+        function populateGallery(artworksData, q) {
+          const galleryContainer = document.getElementById('gallery');
+
+          artworksData.forEach(artwork => {
+            const thumb = document.createElement('div');
+            thumb.classList.add('thumb');
+
+            const link = document.createElement('a');
+            link.href = `framing.html?objectID=${artwork.objectID}`;
+            link.id = artwork.objectID;
+
+            const image = document.createElement('img');
+            image.src = artwork.primaryImageSmall;
+            image.alt = artwork.title;
+            image.id = artwork.objectID;
+
+            const museumLabel = document.createElement('div');
+            museumLabel.classList.add('museum-label');
+
+            const artistSpan = document.createElement('span');
+            artistSpan.classList.add('artist');
+            artistSpan.textContent = artwork.artistDisplayName;
+
+            const titleSpan = document.createElement('span');
+            titleSpan.classList.add('title');
+            titleSpan.textContent = artwork.title + ', ';
+
+            const dateSpan = document.createElement('span');
+            dateSpan.classList.add('date');
+            dateSpan.textContent = artwork.objectDate;
+
+            museumLabel.appendChild(artistSpan);
+            museumLabel.appendChild(titleSpan);
+            museumLabel.appendChild(dateSpan);
+
+            link.appendChild(image);
+            link.appendChild(museumLabel);
+
+            thumb.appendChild(link);
+
+            galleryContainer.appendChild(thumb);
+            document.body.appendChild(galleryContainer);
+          });
+
+          // Search is done, show text
+          if (q) {
+            if (artworksData) {
+              if (artworksData.length === 1) {
+                searchInfo.textContent = `Found 1 artwork for “${q}”`;
+              } else {
+                searchInfo.textContent = `Found ${artworksData.length} artworks for “${q}”`;
+              }
+            } else {
+              searchInfo.textContent = 'Found 0 artworks for “' + q + '”';
+            }
+          }
+        }
+
+        function showItemsCountInCart() {
+          const items = localStorage.getItem('cart');
+          if (items) {
+            const itemsJSON = JSON.parse(items);
+            const itemsCount = itemsJSON.length;
+            let cartLink = document.getElementById('cart-link');
+            if (itemsCount)
+              cartLink.textContent = "Cart ("+ itemsCount + ")";
+          }
+        }
+      </script>
+
+      <!--Use the HTML template below to populate the gallery with images-->
+      <!--
+        <div class="thumb">
+          <a href="" id="">
+            <img src="" alt="" id="">
+            <div class="museum-label">
+              <span class="artist"></span>
+              <span class="title"></span>,
+              <span class="date"></span>
+            </div>
+          </a>
+        </div>
+      -->
+
+    </section>
+  </main>
+</body>
+
+</html>
